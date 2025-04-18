@@ -15,7 +15,18 @@ bot.on('text', ctx => {
     lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
     ctx.reply(`✅ Bump scheduled every ${INTERVAL_SECONDS} seconds.`);
   }
+
+  //stop script
+
+  if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
+    chats.delete(ctx.chat.id);                               
+    ctx.reply('🛑 Bump stopped.');                            
+    return;                                                   
+  }
+
+
 });
+
 
 cron.schedule('* * * * * *', () => {                    // ← UPDATED: run every second
   const now = Math.floor(Date.now() / 1000);            // ← NEW: current timestamp
