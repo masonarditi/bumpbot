@@ -6,7 +6,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 const chats = new Set<number>();
 
 const BOT_USERNAME = 'BumppBot';
-const INTERVAL_SECONDS = 100;
+const INTERVAL_SECONDS = 10;
 let lastBumpTS = 0;                                     // ← NEW: track last bump time
 
 bot.on('text', ctx => {
