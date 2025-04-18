@@ -6,29 +6,22 @@ const bot = new Telegraf(process.env.BOT_TOKEN!);
 const chats = new Set<number>();
 
 const BOT_USERNAME = 'BumppBot';
-const INTERVAL_SECONDS = 20;
-let lastBumpTS = 0;                                     // ← track last bump time
+const INTERVAL_SECONDS = 100;
+let lastBumpTS = 0;                                     // ← NEW: track last bump time
 
 bot.on('text', ctx => {
-  const text = ctx.message.text.toLowerCase();
-
-  if (text.includes(`@${BOT_USERNAME} bump`)) {
+  if (ctx.message.text.includes(`@${BOT_USERNAME} bump`)) {
     chats.add(ctx.chat.id);
-    lastBumpTS = Math.floor(Date.now() / 1000);          // ← set initial timestamp
+    lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
     ctx.reply(`✅ Bump scheduled every ${INTERVAL_SECONDS} seconds.`);
-
-  } else if (text.includes(`@${BOT_USERNAME} stop`)) {   // ← NEW: handle stop command
-    chats.delete(ctx.chat.id);                           // ← NEW: unregister chat
-    lastBumpTS = 0;                                      // ← NEW: reset timer
-    ctx.reply('🛑 Bump stopped.');                       // ← NEW: confirmation
   }
 });
 
-cron.schedule('* * * * * *', () => {                    // ← run every second
-  const now = Math.floor(Date.now() / 1000);            // ← current timestamp
-  if (lastBumpTS && now - lastBumpTS >= INTERVAL_SECONDS) {
+cron.schedule('* * * * * *', () => {                    // ← UPDATED: run every second
+  const now = Math.floor(Date.now() / 1000);            // ← NEW: current timestamp
+  if (lastBumpTS && now - lastBumpTS >= INTERVAL_SECONDS) { // ← NEW: check true interval
     chats.forEach(id => bot.telegram.sendMessage(id, 'bump'));
-    lastBumpTS = now;                                   // ← reset for next cycle
+    lastBumpTS = now;                                   // ← NEW: reset for next cycle
   }
 });
 
