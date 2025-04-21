@@ -70,7 +70,7 @@ bot.on('new_chat_members', (ctx) => {
   const botAdded = newMembers.some(member => member.username === BOT_USERNAME);
   
   if (botAdded) {
-    ctx.reply(welcomeMessage);
+    ctx.reply(welcomeMessage, { parse_mode: 'HTML' });
   }
 });
 
@@ -82,7 +82,7 @@ bot.on('text', ctx => {
   if ((messageText.includes(`@${BOT_USERNAME} hi`.toLowerCase()) && !messageText.includes('bump')) || 
       messageText.includes(`@${BOT_USERNAME} info`.toLowerCase()) || 
       messageText.includes(`@${BOT_USERNAME} about`.toLowerCase())) {
-    ctx.reply(welcomeMessage);
+    ctx.reply(welcomeMessage, { parse_mode: 'HTML' });
     return;
   }
 
