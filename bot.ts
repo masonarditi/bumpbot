@@ -3,49 +3,37 @@ import 'dotenv/config';
 import cron from 'node-cron';
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
-
-// Store custom schedules per chat: { interval: seconds, last: unixTimestamp }
-const schedules = new Map<number, { interval: number; last: number }>();
+const chats = new Set<number>();
 
 const BOT_USERNAME = 'BumppBot';
+const INTERVAL_SECONDS = 10;
+let lastBumpTS = 0;                                     // ← NEW: track last bump time
 
 bot.on('text', ctx => {
-  const text = ctx.message.text.toLowerCase().trim();
-
-  // Stop command
-  if (text.includes(`@${BOT_USERNAME} stop`)) {
-    schedules.delete(ctx.chat.id);
-    ctx.reply('🛑 Bump stopped.');
-    return;
+  if (ctx.message.text.includes(`@${BOT_USERNAME} bump`)) {
+    chats.add(ctx.chat.id);
+    lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
+    ctx.reply(`✅ Bump scheduled BROOOOO ${INTERVAL_SECONDS} seconds.`);
   }
 
-  // Bump with custom interval: "@BumppBot bump this in 30 minutes"
-  const match = text.match(
-    new RegExp(`@${BOT_USERNAME}\\s+bump\\s+this\\s+in\\s+(\\d+)\\s*(minutes?|hours?|days?)`)
-  );
-  if (match) {
-    const amount = parseInt(match[1], 10);
-    const unit   = match[2];
-    let interval = 0;
-    if (unit.startsWith('minute')) interval = amount * 60;
-    else if (unit.startsWith('hour'))  interval = amount * 3600;
-    else if (unit.startsWith('day'))   interval = amount * 86400;
+  //stop script
 
-    const now = Math.floor(Date.now() / 1000);
-    schedules.set(ctx.chat.id, { interval, last: now });
-    ctx.reply(`✅ Bump scheduled every ${amount} ${unit}.`);
-    return;
+  if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
+    chats.delete(ctx.chat.id);                               
+    ctx.reply('🛑 Bump stopped.');                            
+    return;                                                   
   }
+
+
 });
 
-cron.schedule('* * * * * *', () => {
-  const now = Math.floor(Date.now() / 1000);
-  schedules.forEach((sched, chatId) => {
-    if (now - sched.last >= sched.interval) {
-      bot.telegram.sendMessage(chatId, 'bump');
-      sched.last = now;
-    }
-  });
+
+cron.schedule('* * * * * *', () => {                    // ← UPDATED: run every second
+  const now = Math.floor(Date.now() / 1000);            // ← NEW: current timestamp
+  if (lastBumpTS && now - lastBumpTS >= INTERVAL_SECONDS) { // ← NEW: check true interval
+    chats.forEach(id => bot.telegram.sendMessage(id, 'bump'));
+    lastBumpTS = now;                                   // ← NEW: reset for next cycle
+  }
 });
 
 bot.launch({ dropPendingUpdates: true });
