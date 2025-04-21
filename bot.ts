@@ -97,22 +97,39 @@ bot.on('text', ctx => {
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = messageText.match(new RegExp(`@${BOT_USERNAME} bump this in (\\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)`, 'i'));
+  const bumpCustomMatch = messageText.match(new RegExp(`@${BOT_USERNAME} bump this in (\\d+|a|an) (second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|day|days|week|weeks)`, 'i'));
   if (bumpCustomMatch) {
-    const amount = parseInt(bumpCustomMatch[1]);
-    const unit = bumpCustomMatch[2].toLowerCase();
+    let amount: number;
     
+    // Handle "a" or "an" as 1
+    if (bumpCustomMatch[1].toLowerCase() === 'a' || bumpCustomMatch[1].toLowerCase() === 'an') {
+      amount = 1;
+    } else {
+      amount = parseInt(bumpCustomMatch[1]);
+    }
+    
+    const unitRaw = bumpCustomMatch[2].toLowerCase();
+    
+    // Normalize units
+    let unit = unitRaw;
     let delaySeconds = 0;
-    if (unit === 'second' || unit === 'seconds') {
+    
+    // Convert abbreviated forms to full forms for processing
+    if (unitRaw === 'sec' || unitRaw === 'secs' || unitRaw === 'second' || unitRaw === 'seconds') {
       delaySeconds = amount;
-    } else if (unit === 'minute' || unit === 'minutes') {
+      unit = amount === 1 ? 'second' : 'seconds';
+    } else if (unitRaw === 'min' || unitRaw === 'mins' || unitRaw === 'minute' || unitRaw === 'minutes') {
       delaySeconds = amount * 60;
-    } else if (unit === 'hour' || unit === 'hours') {
+      unit = amount === 1 ? 'minute' : 'minutes';
+    } else if (unitRaw === 'hour' || unitRaw === 'hours') {
       delaySeconds = amount * 60 * 60;
-    } else if (unit === 'day' || unit === 'days') {
+      unit = amount === 1 ? 'hour' : 'hours';
+    } else if (unitRaw === 'day' || unitRaw === 'days') {
       delaySeconds = amount * 24 * 60 * 60;
-    } else if (unit === 'week' || unit === 'weeks') {
+      unit = amount === 1 ? 'day' : 'days';
+    } else if (unitRaw === 'week' || unitRaw === 'weeks') {
       delaySeconds = amount * 7 * 24 * 60 * 60;
+      unit = amount === 1 ? 'week' : 'weeks';
     }
     
     if (delaySeconds > 0) {
@@ -124,9 +141,7 @@ bot.on('text', ctx => {
         scheduledTime
       });
       
-      // Get the proper form of the unit (singular/plural)
-      const properUnit = getUnitForm(amount, unit);
-      ctx.reply(`✅ Bump scheduled in ${amount} ${properUnit}.`);
+      ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
     }
     return;
   }
