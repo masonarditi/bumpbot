@@ -4,88 +4,78 @@ import cron from 'node-cron';
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 const chats = new Set<number>();
-
 const BOT_USERNAME = 'BumppBot';
-const INTERVAL_SECONDS = 10;
-let lastBumpTS = 0;                                     // ← NEW: track last bump time
 
-// Track custom intervals for each chat
-interface ChatConfig {
-  interval: number; // in seconds
-  lastBumpTS: number;
+// Track one-time scheduled bumps
+interface ScheduledBump {
+  chatId: number;
+  scheduledTime: number; // timestamp in seconds
 }
-const chatConfigs = new Map<number, ChatConfig>();
+const scheduledBumps: ScheduledBump[] = [];
 
 bot.on('text', ctx => {
-  if (ctx.message.text.includes(`@${BOT_USERNAME} bump`)) {
-    chats.add(ctx.chat.id);
-    lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
-    ctx.reply(`✅ Bump scheduled every ${INTERVAL_SECONDS} seconds.`);
+  if (ctx.message.text.includes(`@${BOT_USERNAME} hi`)) {
+    ctx.reply('hello');
   }
 
-  // Custom time period handler
+  // One-time bump after specified time
   const bumpCustomMatch = ctx.message.text.match(/@BumppBot bump this in (\d+) (minute|minutes|hour|hours|day|days)/i);
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
     
-    let intervalSeconds = 0;
+    let delaySeconds = 0;
     if (unit === 'minute' || unit === 'minutes') {
-      intervalSeconds = amount * 60;
+      delaySeconds = amount * 60;
     } else if (unit === 'hour' || unit === 'hours') {
-      intervalSeconds = amount * 60 * 60;
+      delaySeconds = amount * 60 * 60;
     } else if (unit === 'day' || unit === 'days') {
-      intervalSeconds = amount * 24 * 60 * 60;
+      delaySeconds = amount * 24 * 60 * 60;
     }
     
-    if (intervalSeconds > 0) {
+    if (delaySeconds > 0) {
       const chatId = ctx.chat.id;
-      chats.add(chatId);
-      chatConfigs.set(chatId, {
-        interval: intervalSeconds,
-        lastBumpTS: Math.floor(Date.now() / 1000)
+      const scheduledTime = Math.floor(Date.now() / 1000) + delaySeconds;
+      
+      scheduledBumps.push({
+        chatId,
+        scheduledTime
       });
       
-      ctx.reply(`✅ Bump scheduled every ${amount} ${unit}.`);
+      ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
     }
-  }
-
-  if (ctx.message.text.includes(`@${BOT_USERNAME} hi`)) {
-    ctx.reply('hello');
   }
 
   //stop script
-
   if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
-    chats.delete(ctx.chat.id);
-    chatConfigs.delete(ctx.chat.id);                             
+    // Remove all scheduled bumps for this chat
+    const chatId = ctx.chat.id;
+    const initialLength = scheduledBumps.length;
+    
+    // Filter out bumps for this chat
+    for (let i = scheduledBumps.length - 1; i >= 0; i--) {
+      if (scheduledBumps[i].chatId === chatId) {
+        scheduledBumps.splice(i, 1);
+      }
+    }
+    
+    chats.delete(chatId);
     ctx.reply('🛑 Bump stopped.');                            
     return;                                                   
   }
 });
 
-cron.schedule('* * * * * *', () => {                    // ← UPDATED: run every second
-  const now = Math.floor(Date.now() / 1000);            // ← NEW: current timestamp
+// Check for scheduled bumps every second
+cron.schedule('* * * * * *', () => {
+  const now = Math.floor(Date.now() / 1000);
   
-  // Handle default interval bumps
-  if (lastBumpTS && now - lastBumpTS >= INTERVAL_SECONDS) {
-    for (const chatId of chats) {
-      // Skip chats with custom configs
-      if (!chatConfigs.has(chatId)) {
-        bot.telegram.sendMessage(chatId, 'bump');
-      }
-    }
-    lastBumpTS = now;
-  }
-  
-  // Handle custom interval bumps
-  for (const [chatId, config] of chatConfigs.entries()) {
-    if (now - config.lastBumpTS >= config.interval) {
-      bot.telegram.sendMessage(chatId, 'bump');
-      chatConfigs.set(chatId, {
-        ...config,
-        lastBumpTS: now
-      });
+  // Process one-time scheduled bumps
+  for (let i = scheduledBumps.length - 1; i >= 0; i--) {
+    const bump = scheduledBumps[i];
+    if (now >= bump.scheduledTime) {
+      bot.telegram.sendMessage(bump.chatId, 'bump');
+      // Remove the bump from the array after sending
+      scheduledBumps.splice(i, 1);
     }
   }
 });
