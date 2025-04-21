@@ -13,7 +13,7 @@ bot.on('text', ctx => {
   if (ctx.message.text.includes(`@${BOT_USERNAME} bump`)) {
     chats.add(ctx.chat.id);
     lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
-    ctx.reply(`✅ Bump scheduled every ${INTERVAL_SECONDS} seconds.`);
+    ctx.reply(`✅ Bump scheduled BROOOOO ${INTERVAL_SECONDS} seconds.`);
   }
 
   //stop script
