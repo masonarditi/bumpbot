@@ -46,7 +46,7 @@ const welcomeMessage = `
 
 🤖 I can schedule one-time bumps at specific intervals, helping you keep conversations active without manual intervention.
 
-🧪 Try me out by saying something like "@${BOT_USERNAME} bump this in 30 minutes""
+🧪 Try me out by saying something like "@${BOT_USERNAME} bump this in 30 minutes"
 
 📝 Created by @createdbymason
 🔗 Say what's up on <a href="https://x.com/createdbymason">X</a> or <a href="https://t.me/createdbymason">Telegram</a>
@@ -56,7 +56,6 @@ const welcomeMessage = `
 // Help message
 const helpMessage = `
 Here's what I can do:
-• @${BOT_USERNAME} hi - I'll say hello
 • @${BOT_USERNAME} info/about - Learn about me
 • @${BOT_USERNAME} bump this in [number] [unit] - I'll bump after the specified time
   (units: seconds, minutes, hours, days, weeks), e.g. "bump this in 30 minutes" or "bump this in 1 week"
@@ -82,8 +81,7 @@ bot.on('text', ctx => {
   const isBotMentioned = messageText.includes(`@${BOT_USERNAME}`.toLowerCase());
   
   // Welcome/About message triggers
-  if ((messageText.includes(`@${BOT_USERNAME} hi`.toLowerCase()) && !messageText.includes('bump')) || 
-      messageText.includes(`@${BOT_USERNAME} info`.toLowerCase()) || 
+  if (messageText.includes(`@${BOT_USERNAME} info`.toLowerCase()) || 
       messageText.includes(`@${BOT_USERNAME} about`.toLowerCase())) {
     ctx.reply(welcomeMessage, { 
       parse_mode: 'HTML',
