@@ -42,14 +42,15 @@ function getUnitForm(amount: number, unit: string): string {
 
 // Welcome/About message
 const welcomeMessage = `
-👋 Hi there! I'm ${BOT_USERNAME}, a handy bot that helps you schedule bumps in your chats. Try me out by saying "@${BOT_USERNAME} bump this in 30 minutes""
+👋 Hi there! I'm ${BOT_USERNAME}, a handy bot that helps you schedule bumps in your chats. 
 
 🤖 I can schedule one-time bumps at specific intervals, helping you keep conversations active without manual intervention.
+
+🧪 Try me out by saying something like "@${BOT_USERNAME} bump this in 30 minutes""
 
 📝 Created by @createdbymason
 🔗 Say what's up on <a href="https://twitter.com/createdbymason">X</a> or <a href="https://t.me/createdbymason">Telegram</a>
 
-Type "@${BOT_USERNAME} help" to see what I can do!
 `;
 
 // Help message
