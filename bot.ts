@@ -49,7 +49,7 @@ const welcomeMessage = `
 🧪 Try me out by saying something like "@${BOT_USERNAME} bump this in 30 minutes""
 
 📝 Created by @createdbymason
-🔗 Say what's up on <a href="https://twitter.com/createdbymason">X</a> or <a href="https://t.me/createdbymason">Telegram</a>
+🔗 Say what's up on <a href="https://x.com/createdbymason">X</a> or <a href="https://t.me/createdbymason">Telegram</a>
 
 `;
 
