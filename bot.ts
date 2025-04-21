@@ -23,9 +23,12 @@ function formatTimeRemaining(seconds: number): string {
   } else if (seconds < 86400) {
     const hours = Math.floor(seconds / 3600);
     return `${hours} hour${hours !== 1 ? 's' : ''}`;
-  } else {
+  } else if (seconds < 604800) { // Less than a week
     const days = Math.floor(seconds / 86400);
     return `${days} day${days !== 1 ? 's' : ''}`;
+  } else {
+    const weeks = Math.floor(seconds / 604800);
+    return `${weeks} week${weeks !== 1 ? 's' : ''}`;
   }
 }
 
@@ -42,7 +45,7 @@ const helpMessage = `
 Here's what I can do:
 • @${BOT_USERNAME} hi - I'll say hello
 • @${BOT_USERNAME} bump this in [number] [unit] - I'll bump after the specified time
-  (units: seconds, minutes, hours, days)
+  (units: seconds, minutes, hours, days, weeks), e.g. "bump this in 30 minutes" or "bump this in 1 week"
 • @${BOT_USERNAME} show queue - I'll show all scheduled bumps
 • @${BOT_USERNAME} stop - I'll cancel all scheduled bumps
 `;
@@ -57,7 +60,7 @@ bot.on('text', ctx => {
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = messageText.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days)/i);
+  const bumpCustomMatch = messageText.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)/i);
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
@@ -71,6 +74,8 @@ bot.on('text', ctx => {
       delaySeconds = amount * 60 * 60;
     } else if (unit === 'day' || unit === 'days') {
       delaySeconds = amount * 24 * 60 * 60;
+    } else if (unit === 'week' || unit === 'weeks') {
+      delaySeconds = amount * 7 * 24 * 60 * 60;
     }
     
     if (delaySeconds > 0) {
