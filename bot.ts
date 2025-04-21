@@ -40,27 +40,60 @@ function getUnitForm(amount: number, unit: string): string {
   return amount === 1 ? baseUnit : `${baseUnit}s`;
 }
 
+// Welcome/About message
+const welcomeMessage = `
+👋 Hi there! I'm ${BOT_USERNAME}, a handy bot that helps you schedule bumps in your chats.
+
+🤖 I can schedule one-time bumps at specific intervals, helping you keep conversations active without manual intervention.
+
+📝 Created by @createdbymason
+📱 Twitter/X: https://twitter.com/createdbymason
+💬 Telegram: https://t.me/createdbymason
+
+Type "@${BOT_USERNAME} help" to see what I can do!
+`;
+
 // Help message
 const helpMessage = `
 Here's what I can do:
 • @${BOT_USERNAME} hi - I'll say hello
+• @${BOT_USERNAME} info/about - Learn about me
 • @${BOT_USERNAME} bump this in [number] [unit] - I'll bump after the specified time
   (units: seconds, minutes, hours, days, weeks), e.g. "bump this in 30 minutes" or "bump this in 1 week"
 • @${BOT_USERNAME} show queue - I'll show all scheduled bumps
 • @${BOT_USERNAME} stop - I'll cancel all scheduled bumps
 `;
 
-bot.on('text', ctx => {
-  const messageText = ctx.message.text;
-  const isBotMentioned = messageText.includes(`@${BOT_USERNAME}`);
+// Handle new chat members (bot being added to a group)
+bot.on('new_chat_members', (ctx) => {
+  const newMembers = ctx.message.new_chat_members;
+  const botAdded = newMembers.some(member => member.username === BOT_USERNAME);
   
-  if (messageText.includes(`@${BOT_USERNAME} hi`)) {
-    ctx.reply('hello');
+  if (botAdded) {
+    ctx.reply(welcomeMessage);
+  }
+});
+
+bot.on('text', ctx => {
+  const messageText = ctx.message.text.toLowerCase();
+  const isBotMentioned = messageText.includes(`@${BOT_USERNAME}`.toLowerCase());
+  
+  // Welcome/About message triggers
+  if ((messageText.includes(`@${BOT_USERNAME} hi`.toLowerCase()) && !messageText.includes('bump')) || 
+      messageText.includes(`@${BOT_USERNAME} info`.toLowerCase()) || 
+      messageText.includes(`@${BOT_USERNAME} about`.toLowerCase())) {
+    ctx.reply(welcomeMessage);
+    return;
+  }
+
+  // Help message
+  if (messageText.includes(`@${BOT_USERNAME} help`.toLowerCase())) {
+    ctx.reply(helpMessage);
     return;
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = messageText.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)/i);
+  const bumpCustomMatch = messageText.match(/@bumpbot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)/i);
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
@@ -95,7 +128,7 @@ bot.on('text', ctx => {
   }
 
   // Show queue command
-  if (messageText.includes(`@${BOT_USERNAME} show queue`)) {
+  if (messageText.includes(`@${BOT_USERNAME} show queue`.toLowerCase())) {
     const chatId = ctx.chat.id;
     const now = Math.floor(Date.now() / 1000);
     
@@ -123,7 +156,7 @@ bot.on('text', ctx => {
   }
 
   // Stop command
-  if (messageText.includes(`@${BOT_USERNAME} stop`)) {    
+  if (messageText.includes(`@${BOT_USERNAME} stop`.toLowerCase())) {    
     // Remove all scheduled bumps for this chat
     const chatId = ctx.chat.id;
     
