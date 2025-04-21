@@ -13,13 +13,43 @@ interface ScheduledBump {
 }
 const scheduledBumps: ScheduledBump[] = [];
 
+// Helper function to format time remaining
+function formatTimeRemaining(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+  } else if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  } else if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600);
+    return `${hours} hour${hours !== 1 ? 's' : ''}`;
+  } else {
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  }
+}
+
+// Help message
+const helpMessage = `
+Here's what I can do:
+• @${BOT_USERNAME} hi - I'll say hello
+• @${BOT_USERNAME} bump this in [number] [unit] - I'll bump after the specified time
+  (units: seconds, minutes, hours, days)
+• @${BOT_USERNAME} show queue - I'll show all scheduled bumps
+• @${BOT_USERNAME} stop - I'll cancel all scheduled bumps
+`;
+
 bot.on('text', ctx => {
-  if (ctx.message.text.includes(`@${BOT_USERNAME} hi`)) {
+  const messageText = ctx.message.text;
+  const isBotMentioned = messageText.includes(`@${BOT_USERNAME}`);
+  
+  if (messageText.includes(`@${BOT_USERNAME} hi`)) {
     ctx.reply('hello');
+    return;
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = ctx.message.text.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days)/i);
+  const bumpCustomMatch = messageText.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days)/i);
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
@@ -46,10 +76,39 @@ bot.on('text', ctx => {
       
       ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
     }
+    return;
   }
 
-  //stop script
-  if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
+  // Show queue command
+  if (messageText.includes(`@${BOT_USERNAME} show queue`)) {
+    const chatId = ctx.chat.id;
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Find all bumps for this chat
+    const chatBumps = scheduledBumps.filter(bump => bump.chatId === chatId);
+    
+    if (chatBumps.length === 0) {
+      ctx.reply('No bumps scheduled.');
+      return;
+    }
+    
+    // Sort by scheduled time
+    chatBumps.sort((a, b) => a.scheduledTime - b.scheduledTime);
+    
+    // Format the response
+    let response = `📋 Scheduled bumps (${chatBumps.length}):\n\n`;
+    
+    chatBumps.forEach((bump, index) => {
+      const timeRemaining = bump.scheduledTime - now;
+      response += `${index + 1}. Bump in ${formatTimeRemaining(timeRemaining)}\n`;
+    });
+    
+    ctx.reply(response);
+    return;
+  }
+
+  // Stop command
+  if (messageText.includes(`@${BOT_USERNAME} stop`)) {    
     // Remove all scheduled bumps for this chat
     const chatId = ctx.chat.id;
     
@@ -61,8 +120,13 @@ bot.on('text', ctx => {
     }
     
     chats.delete(chatId);
-    ctx.reply('🛑 Bump stopped.');                            
-    return;                                                   
+    ctx.reply('🛑 Bump stopped.');
+    return;
+  }
+  
+  // If the bot is mentioned but no valid command was recognized, show help
+  if (isBotMentioned) {
+    ctx.reply(helpMessage);
   }
 });
 
