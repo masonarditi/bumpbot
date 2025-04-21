@@ -29,6 +29,14 @@ function formatTimeRemaining(seconds: number): string {
   }
 }
 
+// Helper function to get proper unit form (singular/plural)
+function getUnitForm(amount: number, unit: string): string {
+  // Remove any trailing 's' to get the base form
+  const baseUnit = unit.endsWith('s') ? unit.slice(0, -1) : unit;
+  // Add 's' for plural if needed
+  return amount === 1 ? baseUnit : `${baseUnit}s`;
+}
+
 // Help message
 const helpMessage = `
 Here's what I can do:
@@ -74,7 +82,9 @@ bot.on('text', ctx => {
         scheduledTime
       });
       
-      ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
+      // Get the proper form of the unit (singular/plural)
+      const properUnit = getUnitForm(amount, unit);
+      ctx.reply(`✅ Bump scheduled in ${amount} ${properUnit}.`);
     }
     return;
   }
