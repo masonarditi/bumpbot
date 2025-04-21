@@ -47,7 +47,7 @@ const welcomeMessage = `
 🤖 I can schedule one-time bumps at specific intervals, helping you keep conversations active without manual intervention.
 
 📝 Created by @createdbymason
-📱 Twitter/X: https://twitter.com/createdbymason
+🔗 <a href="https://twitter.com/createdbymason">Follow me on X</a>
 💬 Telegram: https://t.me/createdbymason
 
 Type "@${BOT_USERNAME} help" to see what I can do!
