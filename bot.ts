@@ -1,38 +1,23 @@
 import { Telegraf } from 'telegraf';
 import 'dotenv/config';
 import cron from 'node-cron';
+import { handleText } from './scripts';           // ← NEW
+
+export const BOT_USERNAME = 'BumppBot';
+export const INTERVAL_SECONDS = 100;
+export const chats = new Set<number>();
+export const lastBumpTSRef = { value: 0 };
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
-const chats = new Set<number>();
-
-const BOT_USERNAME = 'BumppBot';
-const INTERVAL_SECONDS = 10;
-let lastBumpTS = 0;                                     // ← NEW: track last bump time
-
-bot.on('text', ctx => {
-  if (ctx.message.text.includes(`@${BOT_USERNAME} bump`)) {
-    chats.add(ctx.chat.id);
-    lastBumpTS = Math.floor(Date.now() / 1000);          // ← NEW: set initial timestamp
-    ctx.reply(`✅ Bump scheduled BROOOOO ${INTERVAL_SECONDS} seconds.`);
-  }
-
-  //stop script
-
-  if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
-    chats.delete(ctx.chat.id);                               
-    ctx.reply('🛑 Bump stopped.');                            
-    return;                                                   
-  }
 
 
-});
+bot.on('text', handleText);                       // ← UPDATED
 
-
-cron.schedule('* * * * * *', () => {                    // ← UPDATED: run every second
-  const now = Math.floor(Date.now() / 1000);            // ← NEW: current timestamp
-  if (lastBumpTS && now - lastBumpTS >= INTERVAL_SECONDS) { // ← NEW: check true interval
+cron.schedule('* * * * * *', () => {
+  const now = Math.floor(Date.now() / 1000);
+  if (lastBumpTSRef.value && now - lastBumpTSRef.value >= INTERVAL_SECONDS) {
     chats.forEach(id => bot.telegram.sendMessage(id, 'bump'));
-    lastBumpTS = now;                                   // ← NEW: reset for next cycle
+    lastBumpTSRef.value = now;
   }
 });
 
