@@ -19,13 +19,15 @@ bot.on('text', ctx => {
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = ctx.message.text.match(/@BumppBot bump this in (\d+) (minute|minutes|hour|hours|day|days)/i);
+  const bumpCustomMatch = ctx.message.text.match(/@BumppBot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days)/i);
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
     
     let delaySeconds = 0;
-    if (unit === 'minute' || unit === 'minutes') {
+    if (unit === 'second' || unit === 'seconds') {
+      delaySeconds = amount;
+    } else if (unit === 'minute' || unit === 'minutes') {
       delaySeconds = amount * 60;
     } else if (unit === 'hour' || unit === 'hours') {
       delaySeconds = amount * 60 * 60;
@@ -50,7 +52,6 @@ bot.on('text', ctx => {
   if (ctx.message.text.includes(`@${BOT_USERNAME} stop`)) {    
     // Remove all scheduled bumps for this chat
     const chatId = ctx.chat.id;
-    const initialLength = scheduledBumps.length;
     
     // Filter out bumps for this chat
     for (let i = scheduledBumps.length - 1; i >= 0; i--) {
