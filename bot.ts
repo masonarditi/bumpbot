@@ -3,6 +3,15 @@ import 'dotenv/config';
 import cron from 'node-cron';
 import fs from 'fs';
 import path from 'path';
+import { 
+  handleInfo, 
+  handleHelp, 
+  handleOneTimeBump, 
+  handleRecurringBump, 
+  handleShowQueue, 
+  handleStop,
+  welcomeMessage
+} from './commands';
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 const chats = new Set<number>();
@@ -19,14 +28,14 @@ if (!fs.existsSync(STORAGE_DIR)) {
 }
 
 // Track one-time scheduled bumps
-interface ScheduledBump {
+export interface ScheduledBump {
   chatId: number;
   scheduledTime: number; // timestamp in seconds
 }
 const scheduledBumps: ScheduledBump[] = [];
 
 // Track recurring bumps
-interface RecurringBump {
+export interface RecurringBump {
   chatId: number;
   intervalSeconds: number; // how often to bump
   nextBumpTime: number; // timestamp for next bump
@@ -73,7 +82,7 @@ function loadData() {
 loadData();
 
 // Helper function to format time remaining
-function formatTimeRemaining(seconds: number): string {
+export function formatTimeRemaining(seconds: number): string {
   if (seconds < 60) {
     return `${seconds} second${seconds !== 1 ? 's' : ''}`;
   } else if (seconds < 3600) {
@@ -91,47 +100,13 @@ function formatTimeRemaining(seconds: number): string {
   }
 }
 
-// Helper function to get proper unit form (singular/plural)
-function getUnitForm(amount: number, unit: string): string {
-  // Remove any trailing 's' to get the base form
-  const baseUnit = unit.endsWith('s') ? unit.slice(0, -1) : unit;
-  // Add 's' for plural if needed
-  return amount === 1 ? baseUnit : `${baseUnit}s`;
-}
-
-// Welcome/About message
-const welcomeMessage = `
-👋 Hi there! I'm ${BOT_USERNAME}, a handy bot that helps you schedule bumps in your chats. 
-
-🤖 I can schedule both one-time and recurring bumps, helping you keep conversations active without manual intervention.
-
-🧪 Try me out by saying:
-• "@${BOT_USERNAME} bump this in 30 minutes" (one-time bump)
-• "@${BOT_USERNAME} bump this every 2 hours" (recurring bump)
-
-📝 Created by @createdbymason
-🔗 Say what's up on <a href="https://x.com/createdbymason">X</a> or <a href="https://t.me/createdbymason">Telegram</a>
-
-`;
-
-// Help message
-const helpMessage = `
-Here's what I can do:
-• @${BOT_USERNAME} info/about - Learn about me
-• @${BOT_USERNAME} bump this in [number] [unit] - Schedule a one-time bump
-• @${BOT_USERNAME} bump this every [number] [unit] - Schedule a recurring bump
-  Examples: "bump this in 30 mins" or "bump this every an hour"
-• @${BOT_USERNAME} show queue - Show all scheduled bumps
-• @${BOT_USERNAME} stop - Cancel all scheduled bumps
-`;
-
 // Handle new chat members (bot being added to a group)
 bot.on('new_chat_members', (ctx) => {
   const newMembers = ctx.message.new_chat_members;
   const botAdded = newMembers.some(member => member.username === BOT_USERNAME);
   
   if (botAdded) {
-    ctx.reply(welcomeMessage, { 
+    ctx.reply(welcomeMessage(BOT_USERNAME), { 
       parse_mode: 'HTML',
       disable_web_page_preview: true 
     } as any);
@@ -145,202 +120,45 @@ bot.on('text', ctx => {
   // Welcome/About message triggers
   if (messageText.includes(`@${BOT_USERNAME} info`.toLowerCase()) || 
       messageText.includes(`@${BOT_USERNAME} about`.toLowerCase())) {
-    ctx.reply(welcomeMessage, { 
-      parse_mode: 'HTML',
-      disable_web_page_preview: true 
-    } as any);
+    handleInfo(ctx, BOT_USERNAME);
     return;
   }
 
   // Help message
   if (messageText.includes(`@${BOT_USERNAME} help`.toLowerCase())) {
-    ctx.reply(helpMessage);
+    handleHelp(ctx, BOT_USERNAME);
     return;
   }
 
   // One-time bump after specified time
   const oneTimeBumpMatch = messageText.match(new RegExp(`@${BOT_USERNAME} bump this in (\\d+|a|an) (second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|day|days|week|weeks)`, 'i'));
   if (oneTimeBumpMatch) {
-    let amount: number;
-    
-    // Handle "a" or "an" as 1
-    if (oneTimeBumpMatch[1].toLowerCase() === 'a' || oneTimeBumpMatch[1].toLowerCase() === 'an') {
-      amount = 1;
-    } else {
-      amount = parseInt(oneTimeBumpMatch[1]);
-    }
-    
-    const unitRaw = oneTimeBumpMatch[2].toLowerCase();
-    
-    // Normalize units
-    let unit = unitRaw;
-    let delaySeconds = 0;
-    
-    // Convert abbreviated forms to full forms for processing
-    if (unitRaw === 'sec' || unitRaw === 'secs' || unitRaw === 'second' || unitRaw === 'seconds') {
-      delaySeconds = amount;
-      unit = amount === 1 ? 'second' : 'seconds';
-    } else if (unitRaw === 'min' || unitRaw === 'mins' || unitRaw === 'minute' || unitRaw === 'minutes') {
-      delaySeconds = amount * 60;
-      unit = amount === 1 ? 'minute' : 'minutes';
-    } else if (unitRaw === 'hour' || unitRaw === 'hours') {
-      delaySeconds = amount * 60 * 60;
-      unit = amount === 1 ? 'hour' : 'hours';
-    } else if (unitRaw === 'day' || unitRaw === 'days') {
-      delaySeconds = amount * 24 * 60 * 60;
-      unit = amount === 1 ? 'day' : 'days';
-    } else if (unitRaw === 'week' || unitRaw === 'weeks') {
-      delaySeconds = amount * 7 * 24 * 60 * 60;
-      unit = amount === 1 ? 'week' : 'weeks';
-    }
-    
-    if (delaySeconds > 0) {
-      const chatId = ctx.chat.id;
-      const scheduledTime = Math.floor(Date.now() / 1000) + delaySeconds;
-      
-      scheduledBumps.push({
-        chatId,
-        scheduledTime
-      });
-      
-      saveData(); // Save to persistent storage
-      
-      ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
-    }
+    handleOneTimeBump(ctx, oneTimeBumpMatch, BOT_USERNAME, scheduledBumps, saveData);
     return;
   }
 
   // Recurring bump at specified interval
   const recurringBumpMatch = messageText.match(new RegExp(`@${BOT_USERNAME} bump this every (\\d+|a|an) (second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|day|days|week|weeks)`, 'i'));
   if (recurringBumpMatch) {
-    let amount: number;
-    
-    // Handle "a" or "an" as 1
-    if (recurringBumpMatch[1].toLowerCase() === 'a' || recurringBumpMatch[1].toLowerCase() === 'an') {
-      amount = 1;
-    } else {
-      amount = parseInt(recurringBumpMatch[1]);
-    }
-    
-    const unitRaw = recurringBumpMatch[2].toLowerCase();
-    
-    // Normalize units
-    let unit = unitRaw;
-    let intervalSeconds = 0;
-    
-    // Convert abbreviated forms to full forms for processing
-    if (unitRaw === 'sec' || unitRaw === 'secs' || unitRaw === 'second' || unitRaw === 'seconds') {
-      intervalSeconds = amount;
-      unit = amount === 1 ? 'second' : 'seconds';
-    } else if (unitRaw === 'min' || unitRaw === 'mins' || unitRaw === 'minute' || unitRaw === 'minutes') {
-      intervalSeconds = amount * 60;
-      unit = amount === 1 ? 'minute' : 'minutes';
-    } else if (unitRaw === 'hour' || unitRaw === 'hours') {
-      intervalSeconds = amount * 60 * 60;
-      unit = amount === 1 ? 'hour' : 'hours';
-    } else if (unitRaw === 'day' || unitRaw === 'days') {
-      intervalSeconds = amount * 24 * 60 * 60;
-      unit = amount === 1 ? 'day' : 'days';
-    } else if (unitRaw === 'week' || unitRaw === 'weeks') {
-      intervalSeconds = amount * 7 * 24 * 60 * 60;
-      unit = amount === 1 ? 'week' : 'weeks';
-    }
-    
-    if (intervalSeconds > 0) {
-      const chatId = ctx.chat.id;
-      const nextBumpTime = Math.floor(Date.now() / 1000) + intervalSeconds;
-      
-      // Add to recurring bumps
-      recurringBumps.push({
-        chatId,
-        intervalSeconds,
-        nextBumpTime,
-        description: `every ${amount} ${unit}`
-      });
-      
-      saveData(); // Save to persistent storage
-      
-      ctx.reply(`✅ Recurring bump scheduled every ${amount} ${unit}.`);
-    }
+    handleRecurringBump(ctx, recurringBumpMatch, BOT_USERNAME, recurringBumps, saveData);
     return;
   }
 
   // Show queue command
   if (messageText.includes(`@${BOT_USERNAME} show queue`.toLowerCase())) {
-    const chatId = ctx.chat.id;
-    const now = Math.floor(Date.now() / 1000);
-    
-    // Find all bumps for this chat
-    const oneTimeBumps = scheduledBumps.filter(bump => bump.chatId === chatId);
-    const chatRecurringBumps = recurringBumps.filter(bump => bump.chatId === chatId);
-    
-    if (oneTimeBumps.length === 0 && chatRecurringBumps.length === 0) {
-      ctx.reply('No bumps scheduled.');
-      return;
-    }
-    
-    // Format the response
-    let response = '';
-    
-    if (oneTimeBumps.length > 0) {
-      // Sort by scheduled time
-      oneTimeBumps.sort((a, b) => a.scheduledTime - b.scheduledTime);
-      
-      response += `📆 One-time bumps (${oneTimeBumps.length}):\n`;
-      
-      oneTimeBumps.forEach((bump, index) => {
-        const timeRemaining = bump.scheduledTime - now;
-        response += `${index + 1}. Bump in ${formatTimeRemaining(timeRemaining)}\n`;
-      });
-      
-      if (chatRecurringBumps.length > 0) {
-        response += '\n';
-      }
-    }
-    
-    if (chatRecurringBumps.length > 0) {
-      response += `🔄 Recurring bumps (${chatRecurringBumps.length}):\n`;
-      
-      chatRecurringBumps.forEach((bump, index) => {
-        const timeToNext = bump.nextBumpTime - now;
-        response += `${index + 1}. Bump ${bump.description} (next in ${formatTimeRemaining(timeToNext)})\n`;
-      });
-    }
-    
-    ctx.reply(response);
+    handleShowQueue(ctx, scheduledBumps, recurringBumps);
     return;
   }
 
   // Stop command
   if (messageText.includes(`@${BOT_USERNAME} stop`.toLowerCase())) {    
-    const chatId = ctx.chat.id;
-    let bumpsStopped = 0;
-    
-    // Remove all one-time bumps for this chat
-    for (let i = scheduledBumps.length - 1; i >= 0; i--) {
-      if (scheduledBumps[i].chatId === chatId) {
-        scheduledBumps.splice(i, 1);
-        bumpsStopped++;
-      }
-    }
-    
-    // Remove all recurring bumps for this chat
-    for (let i = recurringBumps.length - 1; i >= 0; i--) {
-      if (recurringBumps[i].chatId === chatId) {
-        recurringBumps.splice(i, 1);
-        bumpsStopped++;
-      }
-    }
-    
-    saveData(); // Save to persistent storage
-    
-    ctx.reply(`🛑 Stopped ${bumpsStopped} bump${bumpsStopped !== 1 ? 's' : ''}.`);
+    handleStop(ctx, scheduledBumps, recurringBumps, saveData);
     return;
   }
   
   // If the bot is mentioned but no valid command was recognized, show help
   if (isBotMentioned) {
-    ctx.reply(helpMessage);
+    handleHelp(ctx, BOT_USERNAME);
   }
 });
 
