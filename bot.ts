@@ -93,7 +93,7 @@ bot.on('text', ctx => {
   }
 
   // One-time bump after specified time
-  const bumpCustomMatch = messageText.match(/@bumpbot bump this in (\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)/i);
+  const bumpCustomMatch = messageText.match(new RegExp(`@${BOT_USERNAME} bump this in (\\d+) (second|seconds|minute|minutes|hour|hours|day|days|week|weeks)`, 'i'));
   if (bumpCustomMatch) {
     const amount = parseInt(bumpCustomMatch[1]);
     const unit = bumpCustomMatch[2].toLowerCase();
