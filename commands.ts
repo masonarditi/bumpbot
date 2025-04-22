@@ -1,14 +1,9 @@
 import { Context } from 'telegraf';
-import admin, { firestore } from 'firebase-admin';
-
-// Initialize Firestore (assumes admin initialized in bot.ts)
-const db = admin.firestore();
-const oneTimeCol = db.collection('one_time_bumps');
-const recurCol   = db.collection('recurring_bumps');
+import { formatTimeRemaining, ScheduledBump, RecurringBump } from './bot';
 
 // Message templates
 export const welcomeMessage = (botUsername: string) => `
-👋 Hi there! I'm ${botUsername}, a handy bot that helps you schedule bumps in your chats.
+👋 Hi there! I'm ${botUsername}, a handy bot that helps you schedule bumps in your chats. 
 
 🤖 I can schedule both one-time and recurring bumps, helping you keep conversations active without manual intervention.
 
@@ -30,17 +25,37 @@ Here's what I can do:
 • @${botUsername} stop - Cancel all scheduled bumps
 `;
 
-// Helper: format seconds to human string
-function formatTimeRemaining(seconds: number): string {
-  if (seconds < 60) return `${seconds} second${seconds !== 1 ? 's' : ''}`;
-  if (seconds < 3600) return `${Math.floor(seconds/60)} minute${Math.floor(seconds/60)!==1?'s':''}`;
-  if (seconds < 86400) return `${Math.floor(seconds/3600)} hour${Math.floor(seconds/3600)!==1?'s':''}`;
-  return `${Math.floor(seconds/86400)} day${Math.floor(seconds/86400)!==1?'s':''}`;
+// Helper function to convert time unit to seconds and normalize unit name
+export function timeUnitToSeconds(amount: number, unitRaw: string): { seconds: number, normalizedUnit: string } {
+  let seconds = 0;
+  let normalizedUnit = '';
+  
+  if (unitRaw === 'sec' || unitRaw === 'secs' || unitRaw === 'second' || unitRaw === 'seconds') {
+    seconds = amount;
+    normalizedUnit = amount === 1 ? 'second' : 'seconds';
+  } else if (unitRaw === 'min' || unitRaw === 'mins' || unitRaw === 'minute' || unitRaw === 'minutes') {
+    seconds = amount * 60;
+    normalizedUnit = amount === 1 ? 'minute' : 'minutes';
+  } else if (unitRaw === 'hour' || unitRaw === 'hours') {
+    seconds = amount * 60 * 60;
+    normalizedUnit = amount === 1 ? 'hour' : 'hours';
+  } else if (unitRaw === 'day' || unitRaw === 'days') {
+    seconds = amount * 24 * 60 * 60;
+    normalizedUnit = amount === 1 ? 'day' : 'days';
+  } else if (unitRaw === 'week' || unitRaw === 'weeks') {
+    seconds = amount * 7 * 24 * 60 * 60;
+    normalizedUnit = amount === 1 ? 'week' : 'weeks';
+  }
+  
+  return { seconds, normalizedUnit };
 }
 
 // Command handlers
 export function handleInfo(ctx: Context, botUsername: string) {
-  ctx.reply(welcomeMessage(botUsername), { parse_mode: 'HTML', disable_web_page_preview: true } as any);
+  ctx.reply(welcomeMessage(botUsername), { 
+    parse_mode: 'HTML',
+    disable_web_page_preview: true 
+  } as any);
 }
 
 export function handleHelp(ctx: Context, botUsername: string) {
@@ -48,84 +63,158 @@ export function handleHelp(ctx: Context, botUsername: string) {
 }
 
 export function handleOneTimeBump(
-  ctx: Context,
-  match: RegExpMatchArray,
-  botUsername: string,
-  scheduledBumps: { chatId: number; scheduledTime: number }[]
+  ctx: Context, 
+  match: RegExpMatchArray, 
+  botUsername: string, 
+  scheduledBumps: ScheduledBump[], 
+  saveCallback: () => void
 ) {
-  const amt = match[1].toLowerCase() === 'a' || match[1].toLowerCase() === 'an' ? 1 : parseInt(match[1], 10);
+  let amount: number;
+  
+  // Handle "a" or "an" as 1
+  if (match[1].toLowerCase() === 'a' || match[1].toLowerCase() === 'an') {
+    amount = 1;
+  } else {
+    amount = parseInt(match[1]);
+  }
+  
   const unitRaw = match[2].toLowerCase();
-  let delay = 0;
-  if (/^sec/.test(unitRaw)) delay = amt;
-  else if (/^min/.test(unitRaw)) delay = amt * 60;
-  else if (/^hour/.test(unitRaw)) delay = amt * 3600;
-  else if (/^day/.test(unitRaw)) delay = amt * 86400;
-  if (!delay) return;
-  const chatId = ctx.chat?.id; if (!chatId) return;
-  const scheduledTime = Math.floor(Date.now()/1000) + delay;
-  scheduledBumps.push({ chatId, scheduledTime });
-  ctx.reply(`✅ Bump scheduled in ${amt} ${unitRaw}${amt!==1?'s':''}.`);
+  const { seconds: delaySeconds, normalizedUnit: unit } = timeUnitToSeconds(amount, unitRaw);
+  
+  if (delaySeconds > 0) {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    
+    const scheduledTime = Math.floor(Date.now() / 1000) + delaySeconds;
+    
+    scheduledBumps.push({
+      chatId,
+      scheduledTime
+    });
+    
+    saveCallback(); // Save to persistent storage
+    
+    ctx.reply(`✅ Bump scheduled in ${amount} ${unit}.`);
+  }
 }
 
 export function handleRecurringBump(
-  ctx: Context,
-  match: RegExpMatchArray,
-  botUsername: string,
-  recurringBumps: { chatId: number; intervalSeconds: number; nextBumpTime: number; description: string }[]
+  ctx: Context, 
+  match: RegExpMatchArray, 
+  botUsername: string, 
+  recurringBumps: RecurringBump[], 
+  saveCallback: () => void
 ) {
-  const amt = match[1].toLowerCase() === 'a' || match[1].toLowerCase() === 'an' ? 1 : parseInt(match[1], 10);
+  let amount: number;
+  
+  // Handle "a" or "an" as 1
+  if (match[1].toLowerCase() === 'a' || match[1].toLowerCase() === 'an') {
+    amount = 1;
+  } else {
+    amount = parseInt(match[1]);
+  }
+  
   const unitRaw = match[2].toLowerCase();
-  let interval = 0;
-  if (/^sec/.test(unitRaw)) interval = amt;
-  else if (/^min/.test(unitRaw)) interval = amt * 60;
-  else if (/^hour/.test(unitRaw)) interval = amt * 3600;
-  else if (/^day/.test(unitRaw)) interval = amt * 86400;
-  if (!interval) return;
-  const chatId = ctx.chat?.id; if (!chatId) return;
-  const nextBumpTime = Math.floor(Date.now()/1000) + interval;
-  recurringBumps.push({ chatId, intervalSeconds: interval, nextBumpTime, description: `every ${amt} ${unitRaw}${amt!==1?'s':''}` });
-  ctx.reply(`✅ Recurring bump scheduled every ${amt} ${unitRaw}${amt!==1?'s':''}.`);
+  const { seconds: intervalSeconds, normalizedUnit: unit } = timeUnitToSeconds(amount, unitRaw);
+  
+  if (intervalSeconds > 0) {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    
+    const nextBumpTime = Math.floor(Date.now() / 1000) + intervalSeconds;
+    
+    // Add to recurring bumps
+    recurringBumps.push({
+      chatId,
+      intervalSeconds,
+      nextBumpTime,
+      description: `every ${amount} ${unit}`
+    });
+    
+    saveCallback(); // Save to persistent storage
+    
+    ctx.reply(`✅ Recurring bump scheduled every ${amount} ${unit}.`);
+  }
 }
 
-export async function handleShowQueue(ctx: Context) {
-  const chatId = ctx.chat?.id; if (!chatId) return;
-  const now = Math.floor(Date.now()/1000);
-  const oneSnap = await oneTimeCol.where('chatId','==',chatId).get();
-  const recSnap = await recurCol.where('chatId','==',chatId).get();
-  if (oneSnap.empty && recSnap.empty) {
+export function handleShowQueue(
+  ctx: Context, 
+  scheduledBumps: ScheduledBump[], 
+  recurringBumps: RecurringBump[]
+) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  
+  const now = Math.floor(Date.now() / 1000);
+  
+  // Find all bumps for this chat
+  const oneTimeBumps = scheduledBumps.filter(bump => bump.chatId === chatId);
+  const chatRecurringBumps = recurringBumps.filter(bump => bump.chatId === chatId);
+  
+  if (oneTimeBumps.length === 0 && chatRecurringBumps.length === 0) {
     ctx.reply('No bumps scheduled.');
     return;
   }
-  let resp = '';
-  if (!oneSnap.empty) {
-    resp += `📆 One-time bumps (${oneSnap.size}):\n`;
-    oneSnap.docs.forEach((d,i) => {
-      const data = d.data() as {scheduledTime:number};
-      resp += `${i+1}. In ${formatTimeRemaining(data.scheduledTime - now)}\n`;
+  
+  // Format the response
+  let response = '';
+  
+  if (oneTimeBumps.length > 0) {
+    // Sort by scheduled time
+    oneTimeBumps.sort((a, b) => a.scheduledTime - b.scheduledTime);
+    
+    response += `📆 One-time bumps (${oneTimeBumps.length}):\n`;
+    
+    oneTimeBumps.forEach((bump, index) => {
+      const timeRemaining = bump.scheduledTime - now;
+      response += `${index + 1}. Bump in ${formatTimeRemaining(timeRemaining)}\n`;
+    });
+    
+    if (chatRecurringBumps.length > 0) {
+      response += '\n';
+    }
+  }
+  
+  if (chatRecurringBumps.length > 0) {
+    response += `🔄 Recurring bumps (${chatRecurringBumps.length}):\n`;
+    
+    chatRecurringBumps.forEach((bump, index) => {
+      const timeToNext = bump.nextBumpTime - now;
+      response += `${index + 1}. Bump ${bump.description} (next in ${formatTimeRemaining(timeToNext)})\n`;
     });
   }
-  if (!recSnap.empty) {
-    if (!oneSnap.empty) resp += '\n';
-    resp += `🔄 Recurring bumps (${recSnap.size}):\n`;
-    recSnap.docs.forEach((d,i) => {
-      const data = d.data() as {intervalSeconds:number; nextBumpTime:number; description:string};
-      resp += `${i+1}. ${data.description} (next in ${formatTimeRemaining(data.nextBumpTime - now)})\n`;
-    });
-  }
-  ctx.reply(resp);
+  
+  ctx.reply(response);
 }
 
 export function handleStop(
-  ctx: Context,
-  scheduledBumps: { chatId: number; scheduledTime: number }[],
-  recurringBumps: { chatId: number; intervalSeconds: number; nextBumpTime: number; description: string }[]
+  ctx: Context, 
+  scheduledBumps: ScheduledBump[], 
+  recurringBumps: RecurringBump[],
+  saveCallback: () => void
 ) {
-  const chatId = ctx.chat?.id; if (!chatId) return;
-  // Remove both in-memory and in Firestore
-  oneTimeCol.doc(chatId.toString()).delete().catch(console.error);
-  recurCol.doc(chatId.toString()).delete().catch(console.error);
-  // Clean in-memory arrays
-  for (let i=scheduledBumps.length-1; i>=0; i--) if (scheduledBumps[i].chatId===chatId) scheduledBumps.splice(i,1);
-  for (let i=recurringBumps.length-1; i>=0; i--) if (recurringBumps[i].chatId===chatId) recurringBumps.splice(i,1);
-  ctx.reply(`🛑 Stopped all bumps in this chat.`);
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  
+  let bumpsStopped = 0;
+  
+  // Remove all one-time bumps for this chat
+  for (let i = scheduledBumps.length - 1; i >= 0; i--) {
+    if (scheduledBumps[i].chatId === chatId) {
+      scheduledBumps.splice(i, 1);
+      bumpsStopped++;
+    }
+  }
+  
+  // Remove all recurring bumps for this chat
+  for (let i = recurringBumps.length - 1; i >= 0; i--) {
+    if (recurringBumps[i].chatId === chatId) {
+      recurringBumps.splice(i, 1);
+      bumpsStopped++;
+    }
+  }
+  
+  saveCallback(); // Save to persistent storage
+  
+  ctx.reply(`🛑 Stopped ${bumpsStopped} bump${bumpsStopped !== 1 ? 's' : ''}.`);
 }
